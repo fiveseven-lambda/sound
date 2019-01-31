@@ -7,7 +7,7 @@
 #include <math.h>
 
 unsigned int samplerate = 44100;
-#define channel 2
+#define channel 1
 #define bitdepth 16
 
 struct Wave{
@@ -69,10 +69,9 @@ int main(int argc, char *argv[]){
 
 	int out = open(out_filename, O_CREAT | O_RDWR, S_IWUSR | S_IRUSR);
 	int mapsize = length * samplerate * bitdepth / 8 * channel + 44;
-	lseek(out, mapsize - 1, SEEK_SET);
-	char c = 0;
-	write(out, &c, 1);
-	lseek(out, 0, SEEK_SET);
+
+	ftruncate(out, mapsize);
+
 	char *map = mmap(NULL, mapsize, PROT_WRITE, MAP_SHARED, out, 0);
 	((char *)map)[0] = 'R';
 	((char *)map)[1] = 'I';
@@ -107,16 +106,25 @@ int main(int argc, char *argv[]){
 
 void write16bit(short *dest){
 	for(int i = 0; i < 100; ++i){
+		double p = cos(2 * M_PI * sound[i].frequency * 440 / samplerate), q = sin(2 * M_PI * sound[i].frequency * 440 / samplerate);
+		double x[2], y[2];
+		x[0] = 1;
+		y[0] = 0;
+		int t = 0;
 		for(int j = 0; j < samplerate * length; ++j){
 			for(int k = 0; k < channel; ++k){
-				dest[j * channel + k] += sin(2 * M_PI * sound[i].frequency * 440 * j / samplerate) * (
+				dest[j * channel + k] += y[t] *
+					(
 						sound[i].velocity[0]
 						* (1 - (double)j / samplerate / length)
 						+ sound[i].velocity[1]
 						* ((double)j / samplerate / length)
-				)
-						* (1 << 15) - 1;
+					)
+				* ((1 << 15) - 1);
 			}
+			x[t ^ 1] = x[t] * p - y[t] * q;
+			y[t ^ 1] = x[t] * q + y[t] * p;
+			t ^= 1;
 		}
 	}
 }
